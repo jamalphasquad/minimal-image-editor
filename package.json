@@ -1,0 +1,19 @@
+{
+  "name": "minimal-image-editor",
+  "version": "1.0.0",
+  "description": "A minimal image editor with Electron and Jimp",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "keywords": ["electron", "image-editor", "jimp"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0"
+  },
+  "dependencies": {
+    "jimp": "^0.22.10"
+  }
+}
