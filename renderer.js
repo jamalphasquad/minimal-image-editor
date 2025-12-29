@@ -129,8 +129,10 @@ function setupEventListeners() {
   });
   
   // Zoom controls
-  document.getElementById('zoom-in-btn').addEventListener('click', () => zoomBy(0.1));
-  document.getElementById('zoom-out-btn').addEventListener('click', () => zoomBy(-0.1));
+  document.getElementById('zoom-in-btn').addEventListener('click', () => zoomBy(0.1, null, null));
+  document.getElementById('zoom-out-btn').addEventListener('click', () => zoomBy(-0.1, null, null));
+  document.getElementById('zoom-reset-btn').addEventListener('click', resetZoom);
+  document.getElementById('zoom-fit-btn').addEventListener('click', fitToScreen);
   
   // Mouse wheel zoom
   const container = document.getElementById('canvas-container');
@@ -527,16 +529,127 @@ function handleWheelZoom(e) {
   if (e.ctrlKey || e.metaKey) {
     e.preventDefault();
     const delta = -e.deltaY * 0.001;
-    zoomBy(delta);
+    zoomBy(delta, e.clientX, e.clientY);
   }
 }
 
-function zoomBy(delta) {
+function zoomBy(delta, mouseX = null, mouseY = null) {
   const newZoom = Math.max(minZoom, Math.min(maxZoom, zoomLevel + delta));
-  setZoom(newZoom);
+  setZoom(newZoom, mouseX, mouseY);
 }
 
-function setZoom(zoom) {
+function resetZoom() {
+  setZoom(1, null, null);
+}
+
+function fitToScreen() {
+  if (!imageLoaded) return;
+  
+  const container = document.getElementById('canvas-container');
+  const containerWidth = container.clientWidth;
+  const containerHeight = container.clientHeight;
+  
+  // Get the actual image dimensions
+  const imageWidth = canvas.width;
+  const imageHeight = canvas.height;
+  
+  // Add padding so image isn't edge-to-edge (40px padding on each side)
+  const availableWidth = containerWidth - 80;
+  const availableHeight = containerHeight - 80;
+  
+  // Calculate scale to fit both dimensions
+  const scaleX = availableWidth / imageWidth;
+  const scaleY = availableHeight / imageHeight;
+  
+  // Use the smaller scale to ensure entire image fits
+  const fitZoom = Math.min(scaleX, scaleY);
+  
+  // Clamp to min/max zoom levels
+  const clampedZoom = Math.max(minZoom, Math.min(maxZoom, fitZoom));
+  
+  setZoom(clampedZoom, null, null);
+  
+  // Center the image after zoom is applied
+  setTimeout(() => {
+    const zoomedWidth = imageWidth * clampedZoom;
+    const zoomedHeight = imageHeight * clampedZoom;
+    
+    // Calculate scroll position to center the image
+    const scrollLeft = (container.scrollWidth - containerWidth) / 2;
+    const scrollTop = (container.scrollHeight - containerHeight) / 2;
+    
+    container.scrollLeft = scrollLeft;
+    container.scrollTop = scrollTop;
+  }, 0);
+}
+
+function setZoom(zoom, mouseX = null, mouseY = null) {
+  if (!imageLoaded) return;
+  
+  const container = document.getElementById('canvas-container');
+  const zoomContainer = document.getElementById('zoom-container');
+  const oldZoom = zoomLevel;
+  
+  // If mouse coordinates provided, zoom towards mouse position
+  if (mouseX !== null && mouseY !== null) {
+    // Get the canvas wrapper position before zoom
+    const wrapperRect = canvasWrapper.getBoundingClientRect();
+    
+    // Check if mouse is over the image
+    const isOverImage = mouseX >= wrapperRect.left && 
+                       mouseX <= wrapperRect.right && 
+                       mouseY >= wrapperRect.top && 
+                       mouseY <= wrapperRect.bottom;
+    
+    if (isOverImage) {
+      // Calculate the point on the image (in image pixel coordinates) under the cursor
+      // This accounts for the current zoom level
+      const imageX = (mouseX - wrapperRect.left) / oldZoom;
+      const imageY = (mouseY - wrapperRect.top) / oldZoom;
+      
+      // Get scroll position before zoom
+      const scrollLeft = container.scrollLeft;
+      const scrollTop = container.scrollTop;
+      
+      // Apply new zoom
+      zoomLevel = zoom;
+      canvasWrapper.style.transform = `scale(${zoomLevel})`;
+      
+      // Update zoom container size to accommodate the zoomed content
+      const baseWidth = canvas.width;
+      const baseHeight = canvas.height;
+      const zoomedWidth = baseWidth * zoomLevel;
+      const zoomedHeight = baseHeight * zoomLevel;
+      
+      // Set minimum size to allow proper scrolling with padding
+      zoomContainer.style.minWidth = (zoomedWidth + 40) + 'px';
+      zoomContainer.style.minHeight = (zoomedHeight + 40) + 'px';
+      
+      // Force a reflow to get updated positions
+      container.offsetHeight;
+      
+      // Calculate where that point on the image is now after zoom
+      const newWrapperRect = canvasWrapper.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      
+      // Calculate where the image point is now in screen coordinates
+      const newPointX = newWrapperRect.left + imageX * zoom;
+      const newPointY = newWrapperRect.top + imageY * zoom;
+      
+      // Calculate how much we need to scroll to put that point back under the cursor
+      const scrollDeltaX = newPointX - mouseX;
+      const scrollDeltaY = newPointY - mouseY;
+      
+      // Apply the scroll adjustment
+      container.scrollLeft = scrollLeft + scrollDeltaX;
+      container.scrollTop = scrollTop + scrollDeltaY;
+      
+      document.getElementById('zoom-level').textContent = Math.round(zoomLevel * 100) + '%';
+      return;
+    }
+  }
+  
+  // Default: zoom to center
   zoomLevel = zoom;
   updateZoom();
 }
@@ -544,8 +657,20 @@ function setZoom(zoom) {
 function updateZoom() {
   if (!imageLoaded) return;
   
+  const zoomContainer = document.getElementById('zoom-container');
+  
   canvasWrapper.style.transform = `scale(${zoomLevel})`;
   canvasWrapper.style.transformOrigin = 'center center';
+  
+  // Update zoom container size to accommodate the zoomed content
+  const baseWidth = canvas.width;
+  const baseHeight = canvas.height;
+  const zoomedWidth = baseWidth * zoomLevel;
+  const zoomedHeight = baseHeight * zoomLevel;
+  
+  // Set minimum size to allow proper scrolling with padding
+  zoomContainer.style.minWidth = (zoomedWidth + 40) + 'px';
+  zoomContainer.style.minHeight = (zoomedHeight + 40) + 'px';
   
   document.getElementById('zoom-level').textContent = Math.round(zoomLevel * 100) + '%';
 }
