@@ -1,9 +1,11 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage, screen, desktopCapturer } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const Jimp = require('jimp');
 
 let mainWindow;
+let captureWindow;
+let capturedScreenshot = null;
 let windowBounds = { width: 1200, height: 800 };
 
 // Load saved window bounds
@@ -141,4 +143,158 @@ ipcMain.handle('copy-to-clipboard', async (event, imageData) => {
   } catch (error) {
     return { success: false, error: error.message };
   }
+});
+
+// Screen capture handlers
+ipcMain.handle('show-capture-modal', async () => {
+  if (mainWindow) {
+    mainWindow.minimize();
+  }
+  return { success: true };
+});
+
+ipcMain.handle('hide-capture-modal', async () => {
+  if (mainWindow) {
+    mainWindow.restore();
+    mainWindow.focus();
+  }
+  return { success: true };
+});
+
+ipcMain.handle('start-screen-capture', async () => {
+  try {
+    // First, minimize the main window to get it out of the way
+    if (mainWindow) {
+      mainWindow.minimize();
+    }
+    
+    // Wait a moment for window to minimize
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Capture the screen
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: screen.getPrimaryDisplay().size
+    });
+    
+    if (sources.length === 0) {
+      throw new Error('No screen sources available');
+    }
+    
+    const screenSource = sources[0];
+    capturedScreenshot = screenSource.thumbnail; // Store screenshot globally
+    const screenshotDataUrl = capturedScreenshot.toDataURL();
+    
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.size;
+    
+    // Create fullscreen overlay window
+    captureWindow = new BrowserWindow({
+      width: width,
+      height: height,
+      x: 0,
+      y: 0,
+      transparent: false,
+      frame: false,
+      alwaysOnTop: true,
+      skipTaskbar: true,
+      resizable: false,
+      fullscreen: true,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false
+      }
+    });
+    
+    captureWindow.setIgnoreMouseEvents(false);
+    
+    // Load capture overlay HTML
+    await captureWindow.loadFile('capture-overlay.html');
+    
+    // Send screenshot to overlay window
+    captureWindow.webContents.send('set-screenshot', screenshotDataUrl);
+    
+    return { success: true };
+  } catch (error) {
+    if (mainWindow) {
+      mainWindow.restore();
+    }
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('capture-screen-area', async (event, bounds) => {
+  try {
+    if (!capturedScreenshot) {
+      throw new Error('No screenshot available');
+    }
+    
+    // The bounds are already in screenshot coordinates from the overlay
+    // Just round them to ensure integer pixel values
+    const cropBounds = {
+      x: Math.round(bounds.x),
+      y: Math.round(bounds.y),
+      width: Math.round(bounds.width),
+      height: Math.round(bounds.height)
+    };
+    
+    // Crop the stored screenshot to the selected area
+    const croppedImage = capturedScreenshot.crop(cropBounds);
+    const buffer = croppedImage.toPNG();
+    
+    // Close capture window
+    if (captureWindow) {
+      captureWindow.close();
+      captureWindow = null;
+    }
+    
+    // Clear stored screenshot
+    capturedScreenshot = null;
+    
+    // Restore main window and send captured image
+    if (mainWindow) {
+      mainWindow.restore();
+      mainWindow.focus();
+      
+      // Send captured image to renderer
+      mainWindow.webContents.send('capture-result', {
+        success: true,
+        data: buffer.toString('base64')
+      });
+    }
+    
+    return {
+      success: true,
+      data: buffer.toString('base64')
+    };
+  } catch (error) {
+    console.error('Screen capture error:', error);
+    if (captureWindow) {
+      captureWindow.close();
+      captureWindow = null;
+    }
+    capturedScreenshot = null; // Clear stored screenshot
+    if (mainWindow) {
+      mainWindow.restore();
+      mainWindow.focus();
+      mainWindow.webContents.send('capture-result', {
+        success: false,
+        error: error.message
+      });
+    }
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('cancel-screen-capture', async () => {
+  if (captureWindow) {
+    captureWindow.close();
+    captureWindow = null;
+  }
+  capturedScreenshot = null; // Clear stored screenshot
+  if (mainWindow) {
+    mainWindow.restore();
+    mainWindow.focus();
+  }
+  return { success: true };
 });

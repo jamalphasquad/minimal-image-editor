@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Screen Capture</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 100vw;
+      height: 100vh;
+      cursor: crosshair;
+      overflow: hidden;
+      background: #000;
+    }
+    
+    #screenshot {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+    }
+    
+    #overlay {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    
+    #selection {
+      position: absolute;
+      border: 2px solid #0066ff;
+      background: rgba(0, 102, 255, 0.1);
+      display: none;
+      pointer-events: none;
+    }
+    
+    #dim-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.3);
+      pointer-events: none;
+    }
+    
+    #instructions {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 20px 30px;
+      border-radius: 8px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 16px;
+      pointer-events: none;
+      z-index: 10000;
+    }
+  </style>
+</head>
+<body>
+  <img id="screenshot" />
+  <div id="overlay">
+    <div id="dim-overlay"></div>
+    <div id="selection"></div>
+    <div id="instructions">
+      Draw a rectangle to capture<br>
+      Press ESC to cancel
+    </div>
+  </div>
+  
+  <script>
+    const { ipcRenderer } = require('electron');
+    
+    const screenshot = document.getElementById('screenshot');
+    const overlay = document.getElementById('overlay');
+    const selection = document.getElementById('selection');
+    const instructions = document.getElementById('instructions');
+    const dimOverlay = document.getElementById('dim-overlay');
+    
+    let isDrawing = false;
+    let startX, startY;
+    let screenshotLoaded = false;
+    
+    // Receive and display screenshot
+    ipcRenderer.on('set-screenshot', (event, dataUrl) => {
+      screenshot.onload = () => {
+        screenshotLoaded = true;
+      };
+      screenshot.src = dataUrl;
+    });
+    
+    // Hide instructions after 2 seconds
+    setTimeout(() => {
+      instructions.style.display = 'none';
+    }, 2000);
+    
+    // Calculate the actual screenshot bounds considering object-fit: contain
+    function getScreenshotBounds() {
+      const imgRect = screenshot.getBoundingClientRect();
+      const imgNaturalWidth = screenshot.naturalWidth;
+      const imgNaturalHeight = screenshot.naturalHeight;
+      
+      // Calculate the scale factor for object-fit: contain
+      const scaleX = imgRect.width / imgNaturalWidth;
+      const scaleY = imgRect.height / imgNaturalHeight;
+      const scale = Math.min(scaleX, scaleY);
+      
+      // Calculate displayed size
+      const displayWidth = imgNaturalWidth * scale;
+      const displayHeight = imgNaturalHeight * scale;
+      
+      // Calculate offset (centering due to object-fit: contain)
+      const offsetX = (imgRect.width - displayWidth) / 2;
+      const offsetY = (imgRect.height - displayHeight) / 2;
+      
+      return {
+        left: imgRect.left + offsetX,
+        top: imgRect.top + offsetY,
+        width: displayWidth,
+        height: displayHeight,
+        scale: scale,
+        naturalWidth: imgNaturalWidth,
+        naturalHeight: imgNaturalHeight
+      };
+    }
+    
+    // Convert screen coordinates to screenshot coordinates
+    function screenToScreenshot(x, y, width, height) {
+      const bounds = getScreenshotBounds();
+      
+      // Convert to relative coordinates within the displayed image
+      const relX = x - bounds.left;
+      const relY = y - bounds.top;
+      
+      // Convert to natural screenshot coordinates
+      return {
+        x: relX / bounds.scale,
+        y: relY / bounds.scale,
+        width: width / bounds.scale,
+        height: height / bounds.scale
+      };
+    }
+    
+    overlay.addEventListener('mousedown', (e) => {
+      if (!screenshotLoaded) return;
+      
+      isDrawing = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      
+      selection.style.left = startX + 'px';
+      selection.style.top = startY + 'px';
+      selection.style.width = '0px';
+      selection.style.height = '0px';
+      selection.style.display = 'block';
+    });
+    
+    overlay.addEventListener('mousemove', (e) => {
+      if (!isDrawing) return;
+      
+      const currentX = e.clientX;
+      const currentY = e.clientY;
+      
+      const x = Math.min(startX, currentX);
+      const y = Math.min(startY, currentY);
+      const width = Math.abs(currentX - startX);
+      const height = Math.abs(currentY - startY);
+      
+      selection.style.left = x + 'px';
+      selection.style.top = y + 'px';
+      selection.style.width = width + 'px';
+      selection.style.height = height + 'px';
+      
+      // Update dim overlay to create cutout effect
+      dimOverlay.style.clipPath = `polygon(
+        0% 0%, 0% 100%, ${x}px 100%, ${x}px ${y}px,
+        ${x + width}px ${y}px, ${x + width}px ${y + height}px,
+        ${x}px ${y + height}px, ${x}px 100%, 100% 100%, 100% 0%
+      )`;
+    });
+    
+    overlay.addEventListener('mouseup', async (e) => {
+      if (!isDrawing) return;
+      
+      const currentX = e.clientX;
+      const currentY = e.clientY;
+      
+      const x = Math.min(startX, currentX);
+      const y = Math.min(startY, currentY);
+      const width = Math.abs(currentX - startX);
+      const height = Math.abs(currentY - startY);
+      
+      // Only capture if there's a meaningful selection
+      if (width > 10 && height > 10) {
+        // Convert screen coordinates to screenshot coordinates
+        const screenshotCoords = screenToScreenshot(x, y, width, height);
+        
+        const result = await ipcRenderer.invoke('capture-screen-area', screenshotCoords);
+        
+        if (result.success) {
+          // Window will be closed by main process
+        } else {
+          console.error('Capture failed:', result.error);
+          await ipcRenderer.invoke('cancel-screen-capture');
+        }
+      } else {
+        await ipcRenderer.invoke('cancel-screen-capture');
+      }
+      
+      isDrawing = false;
+    });
+    
+    // Handle ESC key to cancel
+    document.addEventListener('keydown', async (e) => {
+      if (e.key === 'Escape') {
+        await ipcRenderer.invoke('cancel-screen-capture');
+      }
+    });
+  </script>
+</body>
+</html>

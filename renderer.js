@@ -49,6 +49,7 @@ function setupEventListeners() {
   document.getElementById('copy-btn').addEventListener('click', copyToClipboard);
   document.getElementById('undo-btn').addEventListener('click', undo);
   document.getElementById('redo-btn').addEventListener('click', redo);
+  document.getElementById('screenshot-btn').addEventListener('click', showCaptureModal);
   
   // Tools
   document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -86,6 +87,15 @@ function setupEventListeners() {
   // Resize dialog
   document.getElementById('resize-ok-btn').addEventListener('click', performResize);
   document.getElementById('resize-cancel-btn').addEventListener('click', hideResizeDialog);
+  
+  // Capture modal
+  document.getElementById('start-capture-btn').addEventListener('click', startScreenCapture);
+  document.getElementById('exit-capture-btn').addEventListener('click', hideCaptureModal);
+  
+  // Listen for captured image from main process
+  ipcRenderer.on('captured-image', (event, imageData) => {
+    loadCapturedImage(imageData);
+  });
   
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
@@ -545,6 +555,49 @@ function getTouchDistance(touches) {
   const dx = touches[0].clientX - touches[1].clientX;
   const dy = touches[0].clientY - touches[1].clientY;
   return Math.sqrt(dx * dx + dy * dy);
+}
+
+// Screen capture functions
+async function showCaptureModal() {
+  const captureModal = document.getElementById('capture-modal');
+  captureModal.style.display = 'block';
+}
+
+async function hideCaptureModal() {
+  const captureModal = document.getElementById('capture-modal');
+  captureModal.style.display = 'none';
+}
+
+async function startScreenCapture() {
+  // Hide capture modal first
+  const captureModal = document.getElementById('capture-modal');
+  captureModal.style.display = 'none';
+  
+  // Wait for capture result
+  ipcRenderer.once('capture-result', async (event, captureResult) => {
+    if (captureResult.success) {
+      loadCapturedImage(captureResult.data);
+    } else {
+      console.error('Capture failed:', captureResult.error);
+    }
+  });
+  
+  // Start screen capture process (this will minimize window and show overlay)
+  const result = await ipcRenderer.invoke('start-screen-capture');
+  
+  if (!result.success) {
+    console.error('Failed to start capture:', result.error);
+  }
+}
+
+function loadCapturedImage(imageData) {
+  const img = new Image();
+  img.onload = () => {
+    window.currentImage = img;
+    imageLoaded = true;
+    drawImage(img);
+  };
+  img.src = `data:image/png;base64,${imageData}`;
 }
 
 // Start the app
