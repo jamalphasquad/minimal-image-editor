@@ -164,6 +164,7 @@ async function openFile() {
       window.currentImage = img;
       imageLoaded = true;
       drawImage(img);
+      saveState();
     };
     img.src = `data:image/png;base64,${result.data}`;
   }
@@ -191,6 +192,7 @@ async function pasteFromClipboard() {
       window.currentImage = img;
       imageLoaded = true;
       drawImage(img);
+      saveState();
     };
     img.src = `data:image/png;base64,${result.data}`;
   }
@@ -236,9 +238,6 @@ function drawImage(img) {
   
   // Apply zoom
   updateZoom();
-  
-  // Save initial state
-  saveState();
 }
 
 // Drawing functions
@@ -395,22 +394,24 @@ function performCrop() {
     return;
   }
   
+  // Clear the draw canvas to remove the white border preview
+  drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  
   // Create temporary canvas with cropped image
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = width;
   tempCanvas.height = height;
   const tempCtx = tempCanvas.getContext('2d');
   
-  // Draw the cropped portion
+  // Draw only the main canvas (without the border from drawCanvas)
   tempCtx.drawImage(canvas, x, y, width, height, 0, 0, width, height);
-  tempCtx.drawImage(drawCanvas, x, y, width, height, 0, 0, width, height);
   
   // Load cropped image
   const img = new Image();
   img.onload = () => {
     window.currentImage = img;
     drawImage(img);
-    saveState();
+    saveState(); // Save the new cropped state
   };
   img.src = tempCanvas.toDataURL();
 }
@@ -451,6 +452,7 @@ async function performResize() {
     img.onload = () => {
       window.currentImage = img;
       drawImage(img);
+      saveState();
       hideResizeDialog();
     };
     img.src = `data:image/png;base64,${result.data}`;
@@ -504,13 +506,10 @@ function redo() {
 function restoreState(dataUrl) {
   const img = new Image();
   img.onload = () => {
-    // Clear both canvases
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-    
-    // Draw restored state
-    ctx.drawImage(img, 0, 0);
     window.currentImage = img;
+    imageLoaded = true;
+    // Use drawImage but don't save state
+    drawImage(img);
   };
   img.src = dataUrl;
 }
@@ -596,6 +595,7 @@ function loadCapturedImage(imageData) {
     window.currentImage = img;
     imageLoaded = true;
     drawImage(img);
+    saveState();
   };
   img.src = `data:image/png;base64,${imageData}`;
 }
