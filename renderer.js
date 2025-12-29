@@ -54,6 +54,11 @@ function setupEventListeners() {
   // Tools
   document.querySelectorAll('.tool-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
+      // Merge any existing drawings before switching tools
+      if (imageLoaded) {
+        mergeDrawCanvas();
+      }
+      
       document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
       e.target.classList.add('active');
       currentTool = e.target.dataset.tool;
@@ -62,6 +67,11 @@ function setupEventListeners() {
   });
   
   document.getElementById('crop-btn').addEventListener('click', () => {
+    // Merge any existing drawings before entering crop mode
+    if (imageLoaded) {
+      mergeDrawCanvas();
+    }
+    
     cropMode = true;
     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
   });
@@ -280,6 +290,21 @@ function drawImage(img) {
   updateZoom();
 }
 
+// Merge draw canvas onto main canvas
+function mergeDrawCanvas() {
+  if (!imageLoaded) return;
+  
+  // Draw the drawCanvas content onto the main canvas
+  ctx.drawImage(drawCanvas, 0, 0);
+  
+  // Clear the draw canvas
+  drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  
+  // Update current image
+  window.currentImage = new Image();
+  window.currentImage.src = canvas.toDataURL();
+}
+
 // Drawing functions
 function handleMouseDown(e) {
   const rect = drawCanvas.getBoundingClientRect();
@@ -375,6 +400,9 @@ function handleMouseUp(e) {
   
   isDrawing = false;
   drawCtx.globalAlpha = 1;
+  
+  // Merge draw canvas to main canvas
+  mergeDrawCanvas();
   
   // Save state after drawing
   saveState();
