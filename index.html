@@ -55,6 +55,7 @@
         <button id="circle-btn" class="tool-btn" data-tool="circle" title="Circle">⭕</button>
         <button id="rectangle-btn" class="tool-btn" data-tool="rectangle" title="Rectangle">▭</button>
         <button id="highlighter-btn" class="tool-btn" data-tool="highlighter" title="Highlighter">🖍️</button>
+        <button id="text-btn" class="tool-btn" data-tool="text" title="Text">T</button>
       </div>
       
       <div class="separator"></div>
@@ -153,6 +154,25 @@
       <div class="dialog-buttons">
         <button id="settings-close-btn">Close</button>
       </div>
+    </div>
+  </div>
+  
+  <div id="text-editor" class="text-editor" style="display: none;">
+    <textarea id="text-input" class="text-input" placeholder="Type text..."></textarea>
+    <div class="text-controls">
+      <input type="number" id="text-size" min="8" max="200" value="24">
+      <select id="text-font">
+        <option value="Arial">Arial</option>
+        <option value="Helvetica">Helvetica</option>
+        <option value="Times New Roman">Times</option>
+        <option value="Courier New">Courier</option>
+        <option value="Verdana">Verdana</option>
+        <option value="Georgia">Georgia</option>
+        <option value="Comic Sans MS">Comic</option>
+        <option value="Impact">Impact</option>
+      </select>
+      <input type="color" id="text-color" value="#ff0000">
+      <button id="text-done-btn">Done</button>
     </div>
   </div>
   

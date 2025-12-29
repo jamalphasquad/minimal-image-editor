@@ -144,6 +144,9 @@ function setupEventListeners() {
   document.getElementById('zoom-reset-btn').addEventListener('click', resetZoom);
   document.getElementById('zoom-fit-btn').addEventListener('click', fitToScreen);
   
+  // Text editor
+  document.getElementById('text-done-btn').addEventListener('click', hideTextEditor);
+  
   // Settings
   document.getElementById('settings-btn').addEventListener('click', showSettings);
   document.getElementById('settings-close-btn').addEventListener('click', hideSettings);
@@ -315,6 +318,12 @@ function handleMouseDown(e) {
     cropStartX = startX;
     cropStartY = startY;
     isDrawing = true;
+    return;
+  }
+  
+  // Handle text tool
+  if (currentTool === 'text') {
+    showTextEditor(e.clientX, e.clientY, startX, startY);
     return;
   }
   
@@ -807,6 +816,98 @@ async function triggerGlobalScreenCapture() {
   
   if (!result.success) {
     console.error('Failed to start capture:', result.error);
+  }
+}
+
+// Text tool functions
+let textEditor = null;
+let textX = 0;
+let textY = 0;
+let textPreviewInterval = null;
+
+function showTextEditor(screenX, screenY, canvasX, canvasY) {
+  if (!imageLoaded) return;
+  
+  // Store canvas position
+  textX = canvasX;
+  textY = canvasY;
+  
+  // Get or create text editor
+  textEditor = document.getElementById('text-editor');
+  const textInput = document.getElementById('text-input');
+  const textSize = document.getElementById('text-size');
+  const textFont = document.getElementById('text-font');
+  const textColor = document.getElementById('text-color');
+  
+  // Show editor temporarily to measure height
+  textEditor.style.display = 'block';
+  const editorHeight = textEditor.offsetHeight;
+  
+  // Position editor above the text with proper spacing
+  const fontSize = parseInt(textSize.value);
+  const offset = fontSize + editorHeight + 5;
+  textEditor.style.left = screenX + 'px';
+  textEditor.style.top = (screenY - offset) + 'px';
+  
+  // Clear and focus input
+  textInput.value = '';
+  textInput.focus();
+  
+  // Set color to current drawing color
+  textColor.value = currentColor;
+  
+  // Clear any existing preview
+  drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  
+  // Update text preview on any change
+  const updatePreview = () => {
+    drawTextPreview();
+  };
+  
+  textInput.removeEventListener('input', updatePreview);
+  textSize.removeEventListener('input', updatePreview);
+  textFont.removeEventListener('change', updatePreview);
+  textColor.removeEventListener('input', updatePreview);
+  
+  textInput.addEventListener('input', updatePreview);
+  textSize.addEventListener('input', updatePreview);
+  textFont.addEventListener('change', updatePreview);
+  textColor.addEventListener('input', updatePreview);
+}
+
+function drawTextPreview() {
+  const textInput = document.getElementById('text-input');
+  const textSize = document.getElementById('text-size');
+  const textFont = document.getElementById('text-font');
+  const textColor = document.getElementById('text-color');
+  
+  // Clear draw canvas
+  drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+  
+  const text = textInput.value;
+  if (!text) return;
+  
+  // Set text properties
+  drawCtx.font = `${textSize.value}px ${textFont.value}`;
+  drawCtx.fillStyle = textColor.value;
+  drawCtx.textBaseline = 'top';
+  
+  // Draw text
+  drawCtx.fillText(text, textX, textY);
+}
+
+function hideTextEditor() {
+  if (textEditor) {
+    textEditor.style.display = 'none';
+  }
+  
+  // Merge the text to canvas
+  if (document.getElementById('text-input').value) {
+    mergeDrawCanvas();
+    saveState();
+  } else {
+    // Just clear if no text
+    drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
   }
 }
 
