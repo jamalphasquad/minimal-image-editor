@@ -4,13 +4,24 @@
   "description": "A minimal image editor with Electron and Jimp",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder"
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish"
   },
-  "keywords": ["electron", "image-editor", "jimp"],
+  "keywords": [
+    "electron",
+    "image-editor",
+    "jimp"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@electron-forge/cli": "^7.10.2",
+    "@electron-forge/maker-deb": "^7.10.2",
+    "@electron-forge/maker-dmg": "^7.10.2",
+    "@electron-forge/maker-squirrel": "^7.10.2",
+    "@electron-forge/maker-zip": "^7.10.2",
     "electron": "^28.0.0"
   },
   "dependencies": {
