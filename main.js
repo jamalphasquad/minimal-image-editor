@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage, screen, desktopCapturer } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage, screen, desktopCapturer, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const Jimp = require('jimp');
@@ -7,6 +7,17 @@ let mainWindow;
 let captureWindow;
 let capturedScreenshot = null;
 let windowBounds = { width: 1200, height: 800 };
+let settings = { captureShortcut: '' };
+
+// Load saved settings
+const settingsPath = path.join(app.getPath('userData'), 'settings.json');
+if (fs.existsSync(settingsPath)) {
+  try {
+    settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  } catch (e) {
+    console.error('Error loading settings:', e);
+  }
+}
 
 // Load saved window bounds
 const boundsPath = path.join(app.getPath('userData'), 'window-bounds.json');
@@ -30,6 +41,11 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
+  
+  // Register global shortcuts after window is ready
+  mainWindow.webContents.on('did-finish-load', () => {
+    registerGlobalShortcuts();
+  });
 
   mainWindow.on('resize', () => {
     const bounds = mainWindow.getBounds();
@@ -38,6 +54,8 @@ function createWindow() {
 
   mainWindow.on('close', () => {
     fs.writeFileSync(boundsPath, JSON.stringify(windowBounds));
+    // Unregister all shortcuts when closing
+    globalShortcut.unregisterAll();
   });
 }
 
@@ -297,4 +315,60 @@ ipcMain.handle('cancel-screen-capture', async () => {
     mainWindow.focus();
   }
   return { success: true };
+});
+
+// Settings handlers
+ipcMain.handle('get-settings', async () => {
+  return settings;
+});
+
+ipcMain.handle('save-settings', async (event, newSettings) => {
+  settings = { ...settings, ...newSettings };
+  fs.writeFileSync(settingsPath, JSON.stringify(settings));
+  
+  // Re-register global shortcuts when settings change
+  registerGlobalShortcuts();
+  
+  return { success: true };
+});
+
+// Global shortcuts
+function registerGlobalShortcuts() {
+  // Unregister all existing shortcuts first
+  globalShortcut.unregisterAll();
+  
+  // Register screen capture shortcut if set
+  if (settings.captureShortcut) {
+    try {
+      // Validate shortcut format (must have at least one modifier and one key)
+      const parts = settings.captureShortcut.split('+');
+      const modifiers = ['Ctrl', 'Command', 'Alt', 'Shift', 'CommandOrControl'];
+      const hasModifier = parts.some(p => modifiers.includes(p));
+      const hasKey = parts.some(p => !modifiers.includes(p));
+      
+      if (!hasModifier || !hasKey || parts.length < 2) {
+        console.log('Invalid shortcut format, skipping:', settings.captureShortcut);
+        return;
+      }
+      
+      const registered = globalShortcut.register(settings.captureShortcut, () => {
+        // Trigger screen capture directly
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('trigger-global-capture');
+        }
+      });
+      
+      if (!registered) {
+        console.error('Failed to register shortcut:', settings.captureShortcut);
+      } else {
+        console.log('Successfully registered shortcut:', settings.captureShortcut);
+      }
+    } catch (error) {
+      console.error('Error registering shortcut:', error);
+    }
+  }
+}
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });

@@ -67,6 +67,12 @@
         <input type="range" id="line-width" min="1" max="20" value="2">
         <span id="line-width-value">2</span>
       </div>
+      
+      <div class="separator"></div>
+      
+      <div class="tool-group">
+        <button id="settings-btn" title="Settings">⚙️</button>
+      </div>
     </div>
   </div>
   
@@ -93,6 +99,60 @@
       <h3>Screen Capture</h3>
       <button id="start-capture-btn" class="capture-btn">Capture Screen Area</button>
       <button id="exit-capture-btn" class="capture-btn exit-btn">Exit</button>
+    </div>
+  </div>
+  
+  <div id="settings-modal" class="dialog" style="display: none;">
+    <div class="dialog-content settings-dialog">
+      <h3>Settings</h3>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="theme">Theme</button>
+        <button class="tab-btn" data-tab="shortcuts">Shortcuts</button>
+      </div>
+      
+      <div class="tab-content">
+        <div id="theme-tab" class="tab-pane active">
+          <h4>Select Theme</h4>
+          <div class="theme-grid">
+            <div class="theme-option" data-theme="dark">
+              <div class="theme-preview dark-theme"></div>
+              <span>Dark</span>
+            </div>
+            <div class="theme-option" data-theme="light">
+              <div class="theme-preview light-theme"></div>
+              <span>Light</span>
+            </div>
+            <div class="theme-option" data-theme="nord">
+              <div class="theme-preview nord-theme"></div>
+              <span>Nord</span>
+            </div>
+            <div class="theme-option" data-theme="dracula">
+              <div class="theme-preview dracula-theme"></div>
+              <span>Dracula</span>
+            </div>
+            <div class="theme-option" data-theme="solarized">
+              <div class="theme-preview solarized-theme"></div>
+              <span>Solarized</span>
+            </div>
+          </div>
+        </div>
+        
+        <div id="shortcuts-tab" class="tab-pane">
+          <h4>Keyboard Shortcuts</h4>
+          <div class="shortcut-list">
+            <div class="shortcut-item">
+              <label>Screen Capture:</label>
+              <input type="text" id="capture-shortcut" class="shortcut-input" readonly placeholder="Click to set...">
+              <button id="clear-capture-shortcut" class="clear-shortcut-btn">Clear</button>
+            </div>
+          </div>
+          <p class="shortcut-hint">Click on the input field and press your desired key combination. The shortcut works globally even when the app is minimized.</p>
+        </div>
+      </div>
+      
+      <div class="dialog-buttons">
+        <button id="settings-close-btn">Close</button>
+      </div>
     </div>
   </div>
   

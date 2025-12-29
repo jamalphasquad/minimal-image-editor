@@ -134,6 +134,44 @@ function setupEventListeners() {
   document.getElementById('zoom-reset-btn').addEventListener('click', resetZoom);
   document.getElementById('zoom-fit-btn').addEventListener('click', fitToScreen);
   
+  // Settings
+  document.getElementById('settings-btn').addEventListener('click', showSettings);
+  document.getElementById('settings-close-btn').addEventListener('click', hideSettings);
+  
+  // Settings tabs
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const tab = e.target.dataset.tab;
+      switchTab(tab);
+    });
+  });
+  
+  // Theme selection
+  document.querySelectorAll('.theme-option').forEach(option => {
+    option.addEventListener('click', (e) => {
+      const theme = e.currentTarget.dataset.theme;
+      applyTheme(theme);
+    });
+  });
+  
+  // Shortcut input
+  const captureShortcutInput = document.getElementById('capture-shortcut');
+  captureShortcutInput.addEventListener('click', () => {
+    startCapturingShortcut(captureShortcutInput);
+  });
+  
+  document.getElementById('clear-capture-shortcut').addEventListener('click', () => {
+    clearShortcut('captureShortcut');
+  });
+  
+  // Listen for global shortcut trigger
+  ipcRenderer.on('trigger-global-capture', () => {
+    triggerGlobalScreenCapture();
+  });
+  
+  // Load saved settings on startup
+  loadSettings();
+  
   // Mouse wheel zoom
   const container = document.getElementById('canvas-container');
   container.addEventListener('wheel', handleWheelZoom, { passive: false });
@@ -723,6 +761,174 @@ function loadCapturedImage(imageData) {
     saveState();
   };
   img.src = `data:image/png;base64,${imageData}`;
+}
+
+// Trigger screen capture from global shortcut
+async function triggerGlobalScreenCapture() {
+  // Wait for capture result
+  ipcRenderer.once('capture-result', async (event, captureResult) => {
+    if (captureResult.success) {
+      loadCapturedImage(captureResult.data);
+    } else {
+      console.error('Capture failed:', captureResult.error);
+    }
+  });
+  
+  // Start screen capture process directly (window will minimize and show overlay)
+  const result = await ipcRenderer.invoke('start-screen-capture');
+  
+  if (!result.success) {
+    console.error('Failed to start capture:', result.error);
+  }
+}
+
+// Settings functions
+let currentSettings = {
+  theme: 'dark',
+  captureShortcut: ''
+};
+
+async function loadSettings() {
+  const settings = await ipcRenderer.invoke('get-settings');
+  currentSettings = { ...currentSettings, ...settings };
+  
+  // Apply theme
+  if (currentSettings.theme) {
+    document.body.dataset.theme = currentSettings.theme;
+    updateThemeSelection(currentSettings.theme);
+  }
+  
+  // Display shortcuts
+  if (currentSettings.captureShortcut) {
+    document.getElementById('capture-shortcut').value = currentSettings.captureShortcut;
+  }
+}
+
+async function saveSettings() {
+  await ipcRenderer.invoke('save-settings', currentSettings);
+}
+
+function showSettings() {
+  document.getElementById('settings-modal').style.display = 'flex';
+  loadSettings(); // Reload settings when opening
+}
+
+function hideSettings() {
+  document.getElementById('settings-modal').style.display = 'none';
+}
+
+function switchTab(tabName) {
+  // Update tab buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  
+  // Update tab panes
+  document.querySelectorAll('.tab-pane').forEach(pane => {
+    pane.classList.toggle('active', pane.id === `${tabName}-tab`);
+  });
+}
+
+function applyTheme(theme) {
+  document.body.dataset.theme = theme;
+  currentSettings.theme = theme;
+  saveSettings();
+  updateThemeSelection(theme);
+}
+
+function updateThemeSelection(theme) {
+  document.querySelectorAll('.theme-option').forEach(option => {
+    option.classList.toggle('selected', option.dataset.theme === theme);
+  });
+}
+
+// Shortcut capture
+let capturingShortcut = false;
+let currentShortcutInput = null;
+
+function startCapturingShortcut(input) {
+  if (capturingShortcut) return;
+  
+  capturingShortcut = true;
+  currentShortcutInput = input;
+  input.value = 'Press keys...';
+  input.classList.add('capturing');
+  
+  // Listen for keydown
+  const handleKeyDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Skip if it's only a modifier key
+    if (['Control', 'Meta', 'Alt', 'Shift'].includes(e.key)) {
+      return;
+    }
+    
+    // Build shortcut string
+    const keys = [];
+    if (e.ctrlKey) keys.push('Ctrl');
+    if (e.metaKey) keys.push('Command');
+    if (e.altKey) keys.push('Alt');
+    if (e.shiftKey) keys.push('Shift');
+    
+    // Add the main key
+    let mainKey = e.key;
+    
+    // Convert special keys to proper format
+    if (mainKey === ' ') mainKey = 'Space';
+    else if (mainKey.length === 1) mainKey = mainKey.toUpperCase();
+    
+    keys.push(mainKey);
+    
+    // Need at least one modifier + one key
+    if (keys.length >= 2) {
+      const shortcut = keys.join('+');
+      input.value = shortcut;
+      
+      // Save the shortcut
+      currentSettings.captureShortcut = shortcut;
+      saveSettings();
+      
+      // Stop capturing
+      stopCapturingShortcut();
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('click', handleClickOutside);
+    }
+  };
+  
+  document.addEventListener('keydown', handleKeyDown);
+  
+  // Cancel on click outside
+  const handleClickOutside = (e) => {
+    if (!input.contains(e.target)) {
+      stopCapturingShortcut();
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('click', handleClickOutside);
+    }
+  };
+  
+  setTimeout(() => {
+    document.addEventListener('click', handleClickOutside);
+  }, 100);
+}
+
+function stopCapturingShortcut() {
+  if (!capturingShortcut) return;
+  
+  capturingShortcut = false;
+  if (currentShortcutInput) {
+    currentShortcutInput.classList.remove('capturing');
+    if (currentShortcutInput.value === 'Press keys...') {
+      currentShortcutInput.value = '';
+    }
+  }
+  currentShortcutInput = null;
+}
+
+function clearShortcut(shortcutKey) {
+  currentSettings[shortcutKey] = '';
+  document.getElementById('capture-shortcut').value = '';
+  saveSettings();
 }
 
 // Start the app
