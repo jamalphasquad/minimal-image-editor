@@ -6,6 +6,10 @@ const canvasWrapper = document.getElementById('canvas-wrapper');
 const ctx = canvas.getContext('2d');
 const drawCtx = drawCanvas.getContext('2d');
 
+// Create temporary canvas for highlighter
+const tempCanvas = document.createElement('canvas');
+const tempCtx = tempCanvas.getContext('2d');
+
 let currentTool = 'pen';
 let isDrawing = false;
 let startX, startY;
@@ -20,6 +24,7 @@ let maxZoom = 10;
 let history = [];
 let historyStep = -1;
 let maxHistory = 50;
+let highlighterSnapshot = null;
 
 // Initialize
 function init() {
@@ -202,6 +207,8 @@ function drawImage(img) {
   canvas.height = img.height;
   drawCanvas.width = img.width;
   drawCanvas.height = img.height;
+  tempCanvas.width = img.width;
+  tempCanvas.height = img.height;
   
   // Set wrapper size to match canvas
   canvasWrapper.style.width = img.width + 'px';
@@ -239,9 +246,15 @@ function handleMouseDown(e) {
   
   isDrawing = true;
   
-  if (currentTool === 'pen' || currentTool === 'highlighter') {
+  if (currentTool === 'pen') {
     drawCtx.beginPath();
     drawCtx.moveTo(startX, startY);
+  } else if (currentTool === 'highlighter') {
+    // Save current draw canvas state and prepare temp canvas
+    highlighterSnapshot = drawCtx.getImageData(0, 0, drawCanvas.width, drawCanvas.height);
+    tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+    tempCtx.beginPath();
+    tempCtx.moveTo(startX, startY);
   }
 }
 
@@ -269,14 +282,21 @@ function handleMouseMove(e) {
     drawCtx.lineTo(currentX, currentY);
     drawCtx.stroke();
   } else if (currentTool === 'highlighter') {
-    drawCtx.strokeStyle = currentColor;
-    drawCtx.lineWidth = lineWidth * 3;
-    drawCtx.lineCap = 'round';
-    drawCtx.lineJoin = 'round';
-    drawCtx.globalAlpha = 0.3;
+    // Draw on temp canvas with full opacity
+    tempCtx.strokeStyle = currentColor;
+    tempCtx.lineWidth = lineWidth * 3;
+    tempCtx.lineCap = 'round';
+    tempCtx.lineJoin = 'round';
+    tempCtx.globalAlpha = 1;
     
-    drawCtx.lineTo(currentX, currentY);
-    drawCtx.stroke();
+    tempCtx.lineTo(currentX, currentY);
+    tempCtx.stroke();
+    
+    // Restore snapshot and composite temp canvas with transparency
+    drawCtx.putImageData(highlighterSnapshot, 0, 0);
+    drawCtx.globalAlpha = 0.3;
+    drawCtx.drawImage(tempCanvas, 0, 0);
+    drawCtx.globalAlpha = 1;
   } else {
     // For shapes, clear and redraw
     drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
